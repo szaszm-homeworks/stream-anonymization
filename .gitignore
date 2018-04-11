@@ -1,0 +1,13 @@
+/.dep.inc
+/CMakeCache.txt
+/CMakeFiles
+/Makefile
+/build
+/cmake_install.cmake
+/compile_commands.json
+/dist
+/ext
+/ext_src
+/nbproject
+/output.csv
+/stream-anonymization
