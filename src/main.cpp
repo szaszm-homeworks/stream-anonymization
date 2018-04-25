@@ -1,6 +1,6 @@
 #include "table_meta.hpp"
 #include "col_type.hpp"
-#include "distribution.hpp"
+#include "histogram.hpp"
 #include "table_data.hpp"
 #include "common_types.hpp"
 #include <range/v3/core.hpp>
@@ -73,20 +73,26 @@ std::ostream& print_tuple(std::ostream& os, const Rng& rng) {
 
 int main() {
     using namespace stanon;
-    //using namespace std::literals;
+
+    auto group_age = [](const auto& in) {
+        constexpr auto group_size = 5;
+        auto age = std::get<long>(in);
+        age = age - (age % group_size);
+        return fmt::format("{0}-{1}", age, age + group_size - 1);
+    };
 
     std::vector<col_type> schema = {
-        /* name                   type                dist rules        identification_class           is_sensitive */
-        { "FullName",          data_type::string,       {}, {},   identification_class::identifier,        true },
-        { "NativeCountry",     data_type::enumeration,  {}, {},   identification_class::non_identifier,    false },
-        { "Gender",            data_type::enumeration,  {}, {},   identification_class::non_identifier,    false },
-        { "Age",               data_type::integer,      {}, {},   identification_class::quasi_identifier,  true },
-        { "MaritalStatus",     data_type::enumeration,  {}, {},   identification_class::non_identifier,    false },
-        { "EconomicStatus",    data_type::enumeration,  {}, {},   identification_class::non_identifier,    true },
-        { "IndustrialGroup",   data_type::enumeration,  {}, {},   identification_class::non_identifier,    false },
-        { "HighestEducationCompleted",data_type::enumeration,{},{},identification_class::non_identifier,   false },
-        { "FieldOfStudy",      data_type::enumeration,  {}, {},   identification_class::non_identifier,    false },
-        { "County",            data_type::enumeration,  {}, {},   identification_class::quasi_identifier,  false }
+        /* name                   type                hist rules                  identification_class           is_sensitive */
+        { "FullName",          data_type::string,       histogram{},         {},   identification_class::identifier,        true },
+        { "NativeCountry",     data_type::enumeration,  histogram{},         {},   identification_class::non_identifier,    false },
+        { "Gender",            data_type::enumeration,  histogram{},         {},   identification_class::non_identifier,    false },
+        { "Age",               data_type::integer,      histogram{ group_age }, {},   identification_class::quasi_identifier,  true },
+        { "MaritalStatus",     data_type::enumeration,  histogram{},         {},   identification_class::non_identifier,    false },
+        { "EconomicStatus",    data_type::enumeration,  histogram{},         {},   identification_class::non_identifier,    true },
+        { "IndustrialGroup",   data_type::enumeration,  histogram{},         {},   identification_class::non_identifier,    false },
+        { "HighestEducationCompleted",data_type::enumeration,histogram{},    {}, identification_class::non_identifier,   false },
+        { "FieldOfStudy",      data_type::enumeration,  histogram{},         {},   identification_class::non_identifier,    false },
+        { "County",            data_type::enumeration,  histogram{},         {},   identification_class::quasi_identifier,  false }
     };
 
     //table_meta tm{ /* k: */ 3, /* t: */ 1.0, schema };
@@ -94,12 +100,7 @@ int main() {
     std::cout << "read data, records: " << td.data.size() << '\n';
 
     schema[0].rules.emplace_back([](const auto&) { return null_type{}; });
-    schema[3].rules.emplace_back([](const auto& in) {
-        constexpr auto group_size = 5;
-        auto age = std::get<long>(in);
-        age = age - (age % group_size);
-        return fmt::format("{0}-{1}", age, age + group_size - 1);
-    });
+    schema[3].rules.emplace_back(group_age);
     auto truncate_string = [](auto&& in) { return fmt::format("{0}...", std::get<std::string>(in).substr(0, 3)); };
     schema[6].rules.emplace_back(truncate_string);
     schema[9].rules.emplace_back(truncate_string);
@@ -111,18 +112,16 @@ int main() {
     namespace view = ranges::view;
     std::map<std::vector<typed_value>, size_t> records_per_identity_group;
 
-    // this was an exciting but not too readable experiment
-    //auto id_col_ids_view = view::zip(view::ints, schema)
-    //    | view::filter([](const auto& pair) {
-    //        return pair.second.id_class != identification_class::non_identifier; })
-    //    | view::keys;
-    //std::vector<size_t> identifier_column_ids{ id_col_ids_view.begin(), id_col_ids_view.end() };
-
-    // lets use plain for to collect identifier column indices
+    // collect identifier and sensitive column indices
     std::vector<size_t> identifier_column_ids;
+    std::vector<size_t> sensitive_column_ids;
     for(size_t i = 0; i < schema.size(); ++i) {
         if(schema[i].id_class != identification_class::non_identifier) {
             identifier_column_ids.push_back(i);
+        }
+
+        if(schema[i].is_sensitive) {
+            sensitive_column_ids.push_back(i);
         }
     }
 
@@ -138,6 +137,8 @@ int main() {
 
     for(const auto& row: td.data) {
         records_per_identity_group[make_id_tuple(row)]++;
+
+
     }
 
     auto k = ranges::min(records_per_identity_group | view::values);

@@ -33,7 +33,6 @@ std::ostream& operator<<(std::ostream& os, null_type) {
 constexpr bool operator == (null_type, null_type) noexcept { return true; }
 constexpr bool operator<(null_type, null_type) noexcept { return false; }
 
-
 using typed_value = std::variant<long, double, date_type, std::string, null_type>;
 
 std::ostream& operator<<(std::ostream& os, const typed_value& tv) {

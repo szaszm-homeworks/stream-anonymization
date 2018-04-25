@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common_types.hpp"
-#include "distribution.hpp"
+#include "histogram.hpp"
 #include <range/v3/core.hpp>
 #include <range/v3/range_concepts.hpp>
 #include <string>
@@ -21,7 +21,7 @@ enum class identification_class {
 struct col_type {
     std::string name;
     data_type type;
-    distribution dist;
+    histogram hist;
     std::vector<std::function<typed_value(typed_value input_value)>> rules;
     identification_class id_class;
     bool is_sensitive;
