@@ -7,7 +7,7 @@
 namespace stanon {
 
 struct table_data {
-    std::vector<col_type>& schema;
+    const std::vector<col_type>& schema;
     std::vector<std::vector<typed_value>> data; // first dimension: row, second dimension: attribute
 
     void apply_rules() {

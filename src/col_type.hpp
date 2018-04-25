@@ -37,7 +37,7 @@ struct col_type {
 };
 
 template<typename Rng,
-        CONCEPT_REQUIRES_(ranges::v3::ForwardRange<Rng>() && ranges::v3::ConvertibleTo<ranges::v3::range_value_type_t<Rng>, col_type>())>
+        CONCEPT_REQUIRES_(ranges::ForwardRange<Rng>() && ranges::ConvertibleTo<ranges::range_value_type_t<Rng>, col_type>())>
 void print_header(std::ostream& os, const Rng& schema) {
     bool first = true;
     for (const auto& col : schema) {

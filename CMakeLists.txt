@@ -5,7 +5,7 @@ project(stream-anonymization)
 
 include(ExternalProject)
 
-set(CMAKE_VERBOSE_MAKEFILE on)
+#set(CMAKE_VERBOSE_MAKEFILE on)
 #set(CMAKE_CXX_STANDARD 17)
 add_definitions(-std=c++17)
 set(CMAKE_BUILD_TYPE "Debug")
@@ -28,6 +28,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
                 -Wno-comment
                 -Wno-c++98-compat
                 -Wno-c++98-compat-pedantic
+                -Wno-missing-prototypes
         )
 
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
@@ -147,14 +148,16 @@ ExternalProject_Add(ext_fmt
 )
 
 find_package(Threads)
+find_package(Boost COMPONENTS filesystem REQUIRED)
 
 include_directories(${PATH_INC})
 include_directories(${PATH_SRC})
 include_directories(SYSTEM ${PATH_EXT}/range/include)
 include_directories(SYSTEM ${PATH_EXT}/date/include)
 include_directories(SYSTEM ${PATH_EXT}/fmt/include)
+include_directories(${Boost_INCLUDE_DIR})
 link_directories(${PATH_EXT}/fmt/lib64)
 
 add_executable(stream-anonymization ${PATH_SRC}/main.cpp)
 add_dependencies(stream-anonymization ext_range ext_date_h ext_fmt)
-target_link_libraries(stream-anonymization ${CMAKE_THREAD_LIBS_INIT} fmt)
+target_link_libraries(stream-anonymization ${CMAKE_THREAD_LIBS_INIT} fmt ${Boost_LIBRARIES})
