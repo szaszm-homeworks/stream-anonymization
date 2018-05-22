@@ -10,12 +10,10 @@ struct table_data {
     const std::vector<col_type>& schema;
     std::vector<std::vector<typed_value>> data; // first dimension: row, second dimension: attribute
 
-    void apply_rules() {
-        for (auto& row : data) {
-            for (size_t i = 0; i < schema.size(); i++) {
-                const col_type& ct = schema[i];
-                row[i] = ct.apply_rules(row[i]);
-            }
+    void apply_rules_to_row(std::vector<typed_value>& row) {
+        for (size_t i = 0; i < schema.size(); i++) {
+            const col_type& ct = schema[i];
+            row[i] = ct.apply_rules(row[i]);
         }
     }
 };

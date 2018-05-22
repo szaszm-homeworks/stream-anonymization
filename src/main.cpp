@@ -31,7 +31,7 @@ OutputRng<stanon::typed_value> parse_csv_row(std::string_view line, const Rng& s
     OutputRng<typed_value> row;
     row.reserve(std::size(schema));
     size_t start = 0;
-    for (auto col : schema) {
+    for (const auto& col : schema) {
         assert(start != std::string_view::npos && start < line.size() && "invalid start index");
         auto end = line.find(delimiter, start);
         std::string_view attribute_str = line.substr(start, /* length: */ end - start);
@@ -75,6 +75,7 @@ int main() {
     using namespace stanon;
 
     auto group_age = [](const auto& in) {
+        assert(std::holds_alternative<long>(in) && "age needs to be an integer");
         constexpr auto group_size = 5;
         auto age = std::get<long>(in);
         age = age - (age % group_size);
@@ -86,7 +87,7 @@ int main() {
         { "FullName",          data_type::string,       histogram{},         {},   identification_class::identifier,        true },
         { "NativeCountry",     data_type::enumeration,  histogram{},         {},   identification_class::non_identifier,    false },
         { "Gender",            data_type::enumeration,  histogram{},         {},   identification_class::non_identifier,    false },
-        { "Age",               data_type::integer,      histogram{ group_age }, {},   identification_class::quasi_identifier,  true },
+        { "Age",               data_type::integer,      histogram{},          {},   identification_class::quasi_identifier,  true },
         { "MaritalStatus",     data_type::enumeration,  histogram{},         {},   identification_class::non_identifier,    false },
         { "EconomicStatus",    data_type::enumeration,  histogram{},         {},   identification_class::non_identifier,    true },
         { "IndustrialGroup",   data_type::enumeration,  histogram{},         {},   identification_class::non_identifier,    false },
@@ -96,17 +97,13 @@ int main() {
     };
 
     //table_meta tm{ /* k: */ 3, /* t: */ 1.0, schema };
-    table_data td = read_data_from_csv_file("irishcensus100m.csv", schema);
-    std::cout << "read data, records: " << td.data.size() << '\n';
+    table_data td{ schema, {} };
 
     schema[0].rules.emplace_back([](const auto&) { return null_type{}; });
     schema[3].rules.emplace_back(group_age);
     auto truncate_string = [](auto&& in) { return fmt::format("{0}...", std::get<std::string>(in).substr(0, 3)); };
     schema[6].rules.emplace_back(truncate_string);
     schema[9].rules.emplace_back(truncate_string);
-
-    td.apply_rules();
-
 
     // measure k-anonymity by tracking identity groups
     namespace view = ranges::view;
@@ -125,42 +122,54 @@ int main() {
         }
     }
 
-    auto make_id_tuple = [&identifier_column_ids](const std::vector<typed_value>& row_data) {
-        std::vector<typed_value> result;
-        result.reserve(identifier_column_ids.size());
-        for(size_t idx: identifier_column_ids) {
-            result.push_back(row_data[idx]);
-        }
-        return result;
-    };
-
-
-    for(const auto& row: td.data) {
-        records_per_identity_group[make_id_tuple(row)]++;
-
-
-    }
-
-    auto k = ranges::min(records_per_identity_group | view::values);
-    std::cout << "k: " << k << '\n';
-    std::cout << "number of identity groups: " << records_per_identity_group.size() << '\n';
-
-    // identity groups of size k
-    std::cout << "k-sized identity groups:\n";
-    auto minimal_identity_group_ids = records_per_identity_group
-        | view::filter([k](const auto& p) { return p.second == k; })
-        | view::keys;
-    for(const auto& grp: minimal_identity_group_ids) {
-        print_tuple(std::cout, grp) << '\n';
-    }
-
-
-
-
     {
+        std::ifstream ifs{ "irishcensus100m.csv" };
         std::ofstream ofs{ "output.csv" };
         print_header(ofs, schema);
-        for (const auto& row : td.data) {
+
+
+        std::string line;
+        std::getline(ifs, line); // skip header
+
+
+
+        while(ifs && ifs.good()) {
+            std::getline(ifs, line);
+            if (!ifs) break;
+            td.data.emplace_back(parse_csv_row(line, schema));
+
+            td.apply_rules_to_row(td.data.back());
+
+            auto make_id_tuple = [&identifier_column_ids](const std::vector<typed_value>& row_data) {
+                std::vector<typed_value> result;
+                result.reserve(identifier_column_ids.size());
+                for(size_t idx: identifier_column_ids) {
+                    result.push_back(row_data[idx]);
+                }
+                return result;
+            };
+
+
+            const auto& row = td.data.back();
+            records_per_identity_group[make_id_tuple(row)]++;
+            // track histogram
+            for(size_t i = 0; i < schema.size(); ++i) {
+                schema[i].hist.add_value(row[i]);
+            }
+
+            auto k = ranges::min(records_per_identity_group | view::values);
+            std::cout << "k: " << k << '\n';
+            std::cout << "number of identity groups: " << records_per_identity_group.size() << '\n';
+
+            // identity groups of size k
+            std::cout << "k-sized identity groups: ";
+            auto minimal_identity_group_ids = records_per_identity_group
+                | view::filter([k](const auto& p) { return p.second == k; })
+                | view::keys;
+            for(const auto& grp: minimal_identity_group_ids) {
+                print_tuple(std::cout, grp) << ", ";
+            }
+
             print_row(ofs, row);
         }
     }
